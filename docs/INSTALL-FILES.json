@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "package_type": "complete mod installation; the game and system prerequisites are external",
+  "root_files": [
+    "RDR2VulkanFG.asi",
+    "RDR2VulkanFG.ini",
+    "dinput8.dll"
+  ],
+  "file_count": 20,
+  "zip_bytes": 34565483,
+  "zip_sha256": "ec0f375921f8f820b729cab35477f88465e59a1aed9f137db8b652ca3ecc9746",
+  "files": {
+    "RDR2VulkanFG.asi": "1be7c7116311978d22fabebb9ea2d060d48d57ba948d65c5e1c9ab86f0900987",
+    "RDR2VulkanFG.ini": "c1b3c23fc0d4c104d2ffb16cabce222b4589ac7eb1808ef80046344f6963d605",
+    "RDR2VulkanFG/Core/RTX20/dlssg_sm86.ini": "addf719ab158b2c0dc3486d66db7233d501f837824f995e29f9ddbc2d772fac1",
+    "RDR2VulkanFG/Core/RTX20/dlssg_sm86/backend/sm86_backend.dll": "30ffc6e09a347ccde87ecc6fa54fd7818f5ed8a9353f5c31c2a90835c7f0ca9b",
+    "RDR2VulkanFG/Core/RTX20/dlssg_sm86/kernels/fg_kernels.dll": "1394c2d5d9cc8938ba3e52b043048d20d6d4c13a019c161b11a3dfd16343ec24",
+    "RDR2VulkanFG/Core/RTX20/dlssg_sm86/runtime/nvngx_dlssg.dll": "cadee1aa6db3907babdc3285da2aebc4553d92b89c38ba3eae8abd8bba1bea72",
+    "RDR2VulkanFG/Core/RTX20/version.dll": "7b3f90435be4f94348bf8d128c84871c7f904c704f7690601a263277c327a7b2",
+    "RDR2VulkanFG/Core/RTX40MFGCore.dll": "0db2ad12bd534254e62d59c18c5a2f1708586a57b418bfd1c928c7d366387ea4",
+    "RDR2VulkanFG/RDR2VulkanFGDiagnostics.dll": "64704b4fc7af5b19fcbca0bbc76afa8e9db22b31bc00185aa112c4ffda221418",
+    "RDR2VulkanFG/Streamline/NvLowLatencyVk.dll": "2a77dc3e1c724b7eea5755be0ae7423752e79a2459fae72181a9f00e3507e5d6",
+    "RDR2VulkanFG/Streamline/nvngx_dlssg.dll": "cadee1aa6db3907babdc3285da2aebc4553d92b89c38ba3eae8abd8bba1bea72",
+    "RDR2VulkanFG/Streamline/sl.common.dll": "82924a8954dd671e09351c5de0eb87ad0eb25b944cc9f9ab955ca1d9950de15d",
+    "RDR2VulkanFG/Streamline/sl.dlss_g.dll": "f4a6b2b14dcc0b1485989e430d3b4e3a44ac1800b92ba1ad74f476e64fb2b09c",
+    "RDR2VulkanFG/Streamline/sl.interposer.dll": "9262f8abf3497f36223f6e74704aa34ac26feb8737f019a79edc9bc868821447",
+    "RDR2VulkanFG/Streamline/sl.pcl.dll": "f13d51cfa05f4cd514df2026049e2db8adf359221713170ad386fd499915b582",
+    "RDR2VulkanFG/Streamline/sl.reflex.dll": "0ce9725e3e03ea9e7f81d008b57f33ee365973d2e349131c8b1c3e3378fe2db0",
+    "RDR2VulkanFG/XeSS/libxell.dll": "d2030dcd694fda8f2ec7e044b13e6db8f0b56d4ba9113a5efad334e3f3ded8c7",
+    "RDR2VulkanFG/XeSS/libxess_fg.dll": "ec5e0c65e075570c6ede72618bb666d0be0c2e10b2ea9762c0fe8cb8e375ab27",
+    "dinput8.dll": "ba5bce7470c319e2c5551bf2dafa7a295222d657eb95193483642ab768fdad85",
+    "licenses/NOTICES.txt": "b48e4331ba15e0ac7341b74b8251bbc43afc438df2994386ad36f87ea4da96f7"
+  },
+  "documentation_in_zip": false,
+  "legal_notices_in_licenses_directory": true,
+  "personal_configuration_included": false,
+  "runtime_identity_verification": "PASS",
+  "archive_integrity": "PASS"
+}

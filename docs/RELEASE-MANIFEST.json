@@ -1,0 +1,20 @@
+{
+  "version": "1.0",
+  "package_type": "complete mod installation; the game and system prerequisites are external",
+  "root_files": [
+    "RDR2VulkanFG.asi",
+    "RDR2VulkanFG.ini",
+    "dinput8.dll"
+  ],
+  "file_count": 20,
+  "zip_bytes": 34565483,
+  "zip_sha256": "ec0f375921f8f820b729cab35477f88465e59a1aed9f137db8b652ca3ecc9746",
+  "documentation_in_zip": false,
+  "legal_notices_in_licenses_directory": true,
+  "personal_configuration_included": false,
+  "runtime_identity_verification": "PASS",
+  "archive_integrity": "PASS",
+  "asi_sha256": "1be7c7116311978d22fabebb9ea2d060d48d57ba948d65c5e1c9ab86f0900987",
+  "core_sha256": "0db2ad12bd534254e62d59c18c5a2f1708586a57b418bfd1c928c7d366387ea4",
+  "loader_sha256": "ba5bce7470c319e2c5551bf2dafa7a295222d657eb95193483642ab768fdad85"
+}

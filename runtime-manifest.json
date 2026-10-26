@@ -1,0 +1,30 @@
+{
+  "loader_version": "10.0.1",
+  "loader_source": "https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases/tag/v10.0.1",
+  "loader_sha256": "ba5bce7470c319e2c5551bf2dafa7a295222d657eb95193483642ab768fdad85",
+  "runtime_files": {
+    "Core/RTX40MFGCore.dll": "0db2ad12bd534254e62d59c18c5a2f1708586a57b418bfd1c928c7d366387ea4",
+    "Core/RTX20/version.dll": "7b3f90435be4f94348bf8d128c84871c7f904c704f7690601a263277c327a7b2",
+    "Core/RTX20/dlssg_sm86/backend/sm86_backend.dll": "30ffc6e09a347ccde87ecc6fa54fd7818f5ed8a9353f5c31c2a90835c7f0ca9b",
+    "Core/RTX20/dlssg_sm86/kernels/fg_kernels.dll": "1394c2d5d9cc8938ba3e52b043048d20d6d4c13a019c161b11a3dfd16343ec24",
+    "Core/RTX20/dlssg_sm86/runtime/nvngx_dlssg.dll": "cadee1aa6db3907babdc3285da2aebc4553d92b89c38ba3eae8abd8bba1bea72",
+    "Streamline/NvLowLatencyVk.dll": "2a77dc3e1c724b7eea5755be0ae7423752e79a2459fae72181a9f00e3507e5d6",
+    "Streamline/nvngx_dlssg.dll": "cadee1aa6db3907babdc3285da2aebc4553d92b89c38ba3eae8abd8bba1bea72",
+    "Streamline/sl.common.dll": "82924a8954dd671e09351c5de0eb87ad0eb25b944cc9f9ab955ca1d9950de15d",
+    "Streamline/sl.dlss_g.dll": "f4a6b2b14dcc0b1485989e430d3b4e3a44ac1800b92ba1ad74f476e64fb2b09c",
+    "Streamline/sl.interposer.dll": "9262f8abf3497f36223f6e74704aa34ac26feb8737f019a79edc9bc868821447",
+    "Streamline/sl.pcl.dll": "f13d51cfa05f4cd514df2026049e2db8adf359221713170ad386fd499915b582",
+    "Streamline/sl.reflex.dll": "0ce9725e3e03ea9e7f81d008b57f33ee365973d2e349131c8b1c3e3378fe2db0",
+    "XeSS/libxell.dll": "d2030dcd694fda8f2ec7e044b13e6db8f0b56d4ba9113a5efad334e3f3ded8c7",
+    "XeSS/libxess_fg.dll": "ec5e0c65e075570c6ede72618bb666d0be0c2e10b2ea9762c0fe8cb8e375ab27"
+  },
+  "runtime_notices": [
+    "Encore-THIRD-PARTY-NOTICES.txt",
+    "Core/RTX20/THIRD_PARTY_NOTICES.txt",
+    "Streamline/STREAMLINE-LICENSE.txt",
+    "XeSS/LICENSE.txt",
+    "XeSS/MFG-Unlocker-ATTRIBUTION.txt",
+    "XeSS/MFG-Unlocker-LICENSE.txt",
+    "XeSS/third-party-programs.txt"
+  ]
+}

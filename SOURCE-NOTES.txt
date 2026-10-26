@@ -1,0 +1,10 @@
+RDR2-Vulkan-DLSSFG 1.0 - SOURCE NOTES
+
+This repository contains the current application source, tests, vendored headers
+and build helpers. Dependency revisions are pinned by the build scripts.
+The GPU identity policy, XeSS pacing fixes and native menu are included.
+Build-Core.ps1 rebuilds the corrected core from the vendored sources.
+Build-Interposer.ps1 applies the required native queue-allocation correction.
+The main ASI build does not assemble or rebuild proprietary runtime libraries.
+Third-party copyrights and license notices remain applicable.
+See docs/BUILD.md and docs/MAINTAINER-NOTES.md.

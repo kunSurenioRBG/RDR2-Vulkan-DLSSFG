@@ -1,0 +1,10 @@
+RDR2-Vulkan-DLSSFG 1.0 - VALIDATION
+
+The frame-generation fixes were tested on an RTX 3080 Ti and improved
+smoothness was confirmed by the user. Adapter identity, 4338 pacing checks
+and the production-runtime lifecycle fixture passed.
+The native menu was rendered in isolation at 100% and 150% scale.
+Preview telemetry is illustrative and is absent from the production ASI.
+The versioned frontend still requires user confirmation inside RDR2.
+No universal hardware compatibility or perfectly uniform scanout is claimed.
+See docs/VALIDATION.md.
