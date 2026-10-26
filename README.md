@@ -29,18 +29,6 @@ The installation ZIP includes the official ASI loader, the main ASI, a default I
 3. Existing users can retain their own `RDR2VulkanFG.ini` to keep their preferences.
 4. Start RDR2 with Vulkan and in-game DLSS enabled, then press **Insert** or your configured menu key.
 
-Installation layout:
-
-```text
-dinput8.dll
-RDR2VulkanFG.asi
-RDR2VulkanFG.ini
-RDR2VulkanFG/
-licenses/NOTICES.txt
-```
-
-Instructions and changelogs stay on GitHub. The ZIP contains installation files and one consolidated mandatory license-notice file.
-
 ### System requirements
 
 An installed copy of RDR2, Windows x64, a supported NVIDIA RTX GPU with a compatible driver, in-game DLSS, and the Microsoft Visual C++ x64 runtime required by the SDKs. Enable Hardware-accelerated GPU Scheduling for DLSS-G. Experimental hardware routes retain their limitations.
