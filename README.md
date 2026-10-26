@@ -8,8 +8,6 @@ Frame generation for Red Dead Redemption 2 while the game renders with Vulkan. T
 
 ## Features
 
-- Dark interface with warm red accents, live metrics and Generation, Display and Diagnostics tabs.
-- `kunSurenioRBG` signature in the window title and footer, with clickable YouTube and GitHub links.
 - Native Vulkan DLSS-G path with matching game inputs.
 - XeSS frame generation through the existing internal Vulkan/D3D12 interoperability path.
 - CUDA-backed NVIDIA adapter selection to handle certain duplicate DXGI identities.
