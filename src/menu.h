@@ -9,7 +9,7 @@ void UpdateMenuRuntime(bool off,uint32_t frames);
 void UpdateMenuStats(uint32_t maximum,uint32_t status,float ratio);
 void RecordGamePresent();
 void RecordDisplayedFrames(uint32_t displayedFrames);
-void SetFPSGenerationActive(bool active);
+void SetFPSGenerationActive(bool active,bool resetMeasurement=true);
 bool MenuIsOpen();
 void MenuRendererAvailable(bool available);
 bool MenuInitializeUI();

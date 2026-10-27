@@ -4,6 +4,9 @@
 #include "bridge_format.h"
 #include "bridge_restart.h"
 #include "bridge_resume_history.h"
+#include "bridge_focus.h"
+#include "bridge_recovery_evidence.h"
+#include "message_input.h"
 #include "bridge_sdk_retirement.h"
 #include "swapchain_lock.h"
 #include "slboot.h"
@@ -62,6 +65,12 @@ bool planned{},ready{},attached{},sdkAvailable{},sdkFailed{};
 bool slDevicePrepared{};
 BridgeRestart restartRequest;
 BridgeResumeHistory resumeHistory;
+BridgeFocus focusHistory;
+bool focusFramePending=true;
+BridgeRecoveryEvidence focusEvidence;
+uint64_t evidenceEnabled{},evidenceDisabled{};
+uint64_t preAcquireBindings{};
+unsigned inputGapReports=0;
 ID3D12CommandQueue* dxQueue{};ID3D12CommandQueue* nativeDxQueue{};ID3D12Fence* dxDone{};HANDLE dxEvent{};uint64_t dxSerial{},acquireSerial{},inputSerial{};
 std::unordered_map<VkSurfaceKHR,HWND> windows;
 PFN_vkCreateWin32SurfaceKHR createSurface{};
@@ -82,7 +91,7 @@ std::unordered_map<VkRenderPass,VkRenderPass> passVariants;
 struct Input {
  std::unique_ptr<Snapshot> snapshot=std::make_unique<Snapshot>();VkSemaphore available{};VkFence submittedFence{};
  std::unordered_set<VkCommandBuffer> commands;bool recorded{},submitted{},valid{},used{},colorUsed{};
- uint64_t order{},epoch{},retired{};uint32_t cameraToken{};uint32_t dw{},dh{},mw{},mh{},producerFamily=UINT32_MAX;int flags{};
+ uint64_t order{},epoch{},retired{},focusGeneration{},preparedAfterAcquire{};uint32_t cameraToken{};uint32_t dw{},dh{},mw{},mh{},producerFamily=UINT32_MAX;int flags{};
  xefg_swapchain_frame_constant_data_t constants{};
  sl::Constants slConstants{};
 };
@@ -135,6 +144,25 @@ bool SdkError(bool fatal=true){
  Error(hags?RuntimeErrors::Code::HardwareScheduling:fatal?RuntimeErrors::Code::ProviderInit:RuntimeErrors::Code::ProviderState,
    s.operation && s.operation[0]?s.operation:"Selected bridge backend rejected this operation",s.native);
  if(fatal)sdkFailed=true;return false;
+}
+bool UpdateBridgeFocus(){
+ if(!chain || sdk.IsDLSS())return true;
+ const HWND window=chain->window,foreground=GetForegroundWindow();
+ const bool active=IsWindow(window) && IsWindowVisible(window) && !IsIconic(window) && foreground &&
+  GetAncestor(foreground,GA_ROOT)==GetAncestor(window,GA_ROOT);
+ const auto changed=focusHistory.Observe(active,acquireSerial,menu_input::focusLosses.load(std::memory_order_acquire));
+ if(changed!=BridgeFocus::Change::None){
+  focusFramePending=true;
+  focusEvidence={};evidenceEnabled=evidenceDisabled=0;
+  preAcquireBindings=0;inputGapReports=0;
+  resumeHistory.Invalidate();
+  for(auto& input:inputs)input.valid=false; // Drain submitted work normally; never destroy in-flight resources.
+  if(attached && !sdk.SuspendForFocus())SdkError();
+  SetFPSGenerationActive(false);
+  Log("XeSS focus: %s; generation=%llu cutoffEpoch=%llu; SDK disabled and fresh inputs required",
+   active?"resumed":"suspended",(unsigned long long)focusHistory.generation,(unsigned long long)focusHistory.cutoff);
+ }
+ return active;
 }
 bool Dx(HRESULT result,const char* name){if(SUCCEEDED(result))return true;Error(RuntimeErrors::Code::PresentFailed,name,result);return false;}
 bool Vk(VkResult result,const char* name){if(result==VK_SUCCESS)return true;Error(RuntimeErrors::Code::VulkanDevice,name,result);return false;}
@@ -197,7 +225,7 @@ void DestroyInput(Input& in){
  in=Input{};
 }
 void DestroyInputs(){
- resumeHistory={};ResetFrameCameraHistory();
+ resumeHistory={};focusHistory={};focusFramePending=true;ResetFrameCameraHistory();
  inputDimensions={};
  presentedDimensions={};timings={};timingReportsLeft=3;
  for(auto& in:inputs)DestroyInput(in);
@@ -291,7 +319,7 @@ VKAPI_ATTR VkResult VKAPI_CALL Acquire(VkDevice d,VkSwapchainKHR sc,uint64_t tim
  if(!Own(sc))return Fn<PFN_vkAcquireNextImageKHR>("vkAcquireNextImageKHR")(d,sc,timeout,sem,fence,index);
  if(restartRequest.Pending())return VK_ERROR_OUT_OF_DATE_KHR;
  if(!index || (!sem && !fence))return VK_ERROR_INITIALIZATION_FAILED;
- auto& c=*chain;uint64_t retired[8]{};bool acquired[8]{};
+ auto& c=*chain;const bool focused=UpdateBridgeFocus();uint64_t retired[8]{};bool acquired[8]{};
  for(uint32_t n=0;n<c.frames.size();++n){retired[n]=c.frames[n].retired;acquired[n]=c.frames[n].acquired;}
  auto completed=dxDone->GetCompletedValue();if(completed==UINT64_MAX)return VK_ERROR_DEVICE_LOST;
  uint32_t found=SelectAcquireSlot(retired,acquired,(uint32_t)c.frames.size(),c.next,completed);
@@ -301,11 +329,22 @@ VKAPI_ATTR VkResult VKAPI_CALL Acquire(VkDevice d,VkSwapchainKHR sc,uint64_t tim
  VkQueue q=graphicsQueue;if(!q)return VK_ERROR_INITIALIZATION_FAILED;
  VkSubmitInfo signal{VK_STRUCTURE_TYPE_SUBMIT_INFO};signal.signalSemaphoreCount=sem?1:0;signal.pSignalSemaphores=sem?&sem:nullptr;
  auto result=Fn<PFN_vkQueueSubmit>("vkQueueSubmit")(q,1,&signal,fence);if(result!=VK_SUCCESS)return result;
+ const bool outstandingAcquire=std::any_of(acquired,acquired+c.frames.size(),[](bool value){return value;});
  f.acquired=true;f.submitMarked=false;f.epoch=++acquireSerial;c.next=(found+1)%(uint32_t)c.frames.size();*index=found;
+ if(!sdk.IsDLSS()){
+  Input* unbound=nullptr;unsigned count=0;
+  for(auto& input:inputs)if(input.recorded && !input.epoch){unbound=&input;++count;}
+  if(unbound && unbound->valid && focusHistory.BindPreAcquire(f.epoch,unbound->preparedAfterAcquire,
+       unbound->focusGeneration,unbound->epoch,count,outstandingAcquire)){
+   if(!preAcquireBindings)Log("XeSS pre-acquire association: snapshot=%llu bound to fresh epoch=%llu generation=%llu",
+    (unsigned long long)unbound->order,(unsigned long long)f.epoch,(unsigned long long)focusHistory.generation);
+   ++preAcquireBindings;
+  }
+ }
  // The acquire signal is already submitted. XeLL can pace without holding the
  // graphics queue hostage. Keep the provider lock for SDK lifecycle/marker order.
  queueGuard.Unlock();
- if(attached && (!sdkFailed || sdk.IsDLSS())){uint32_t id=uint32_t((f.epoch-1)%UINT32_MAX)+1;double sleepStart=ClockMs();if(!sdk.Sleep(id,Rt().fpsCap.load(std::memory_order_relaxed)))SdkError(false);timings.sleep.Add(ClockMs()-sleepStart);if(!sdk.Marker(id,XELL_SIMULATION_START))SdkError(false);}
+ if(attached && (!sdkFailed || sdk.IsDLSS())){uint32_t id=uint32_t((f.epoch-1)%UINT32_MAX)+1;double sleepStart=ClockMs();if(focused && !sdk.Sleep(id,Rt().fpsCap.load(std::memory_order_relaxed)))SdkError(false);timings.sleep.Add(ClockMs()-sleepStart);if(!sdk.Marker(id,XELL_SIMULATION_START))SdkError(false);}
  HudCaptureBeginFrame(f.epoch);return VK_SUCCESS;
 }
 VKAPI_ATTR VkResult VKAPI_CALL Acquire2(VkDevice d,const VkAcquireNextImageInfoKHR* info,uint32_t* index){
@@ -546,7 +585,16 @@ VkResult XessCreateSwapchain(VkDevice d,const VkSwapchainCreateInfoKHR* ci,const
   if(SUCCEEDED(colorResult))colorResult=c.dx->SetColorSpace1(colorSpace);
   if(FAILED(colorResult)){factory->Release();Error(RuntimeErrors::Code::ProviderInit,"The selected DXGI output cannot present HDR10; use SDR output",colorResult);DestroyChain();return fallback();}
  }
- factory->MakeWindowAssociation(c.window,DXGI_MWA_NO_ALT_ENTER);factory->Release();
+ // Vulkan/RDR2 owns window activation and mode changes. Disabling Alt+Enter
+ // alone still lets DXGI monitor the host message queue during Alt+Tab.
+ IDXGIFactory* windowFactory{};
+ HRESULT windowPolicy=c.dx->GetParent(__uuidof(IDXGIFactory),(void**)&windowFactory);
+ if(SUCCEEDED(windowPolicy) && windowFactory){
+  windowPolicy=windowFactory->MakeWindowAssociation(c.window,DXGI_MWA_NO_WINDOW_CHANGES|DXGI_MWA_NO_ALT_ENTER);
+  windowFactory->Release();
+ }else windowPolicy=factory->MakeWindowAssociation(c.window,DXGI_MWA_NO_WINDOW_CHANGES|DXGI_MWA_NO_ALT_ENTER);
+ Log("Bridge window policy: host handles activation/mode changes; result=0x%08x",(unsigned)windowPolicy);
+ factory->Release();
  LogPresentationDisplay(c.window,c.dx);
  VkCommandPoolCreateInfo pc{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};pc.flags=VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;pc.queueFamilyIndex=family;
  if(!Vk(Fn<PFN_vkCreateCommandPool>("vkCreateCommandPool")(device,&pc,nullptr,&c.pool),"XeSS bridge command pool")){DestroyChain();return fallback();}
@@ -562,6 +610,7 @@ VkResult XessCreateSwapchain(VkDevice d,const VkSwapchainCreateInfoKHR* ci,const
 bool XessPrepare(VkCommandBuffer cmd,VkImage depthImage,VkImage motionImage,uint32_t dw,uint32_t dh,uint32_t mw,uint32_t mh,
  float jx,float jy,float sx,float sy,const ImageState& ds,const ImageState& ms,const sl::Constants& constants,int flags,VkOffset2D depthOrigin,VkOffset2D motionOrigin){
  std::lock_guard<std::recursive_mutex> guard(lock);if(!chain || !attached || sdkFailed)return false;
+ if(!sdk.IsDLSS() && !focusHistory.active)return false;
  auto command=commandPools.find(cmd);
  auto pool=command==commandPools.end()?pools.end():pools.find(command->second);
  if(pool==pools.end() || (pool->second.flags&VK_COMMAND_POOL_CREATE_PROTECTED_BIT) || pool->second.family>=queueProperties.size() ||
@@ -615,6 +664,8 @@ bool XessPrepare(VkCommandBuffer cmd,VkImage depthImage,VkImage motionImage,uint
  if(Cfg().cameraSource==CameraSource::Derived || Cfg().cameraAudit)RecordRenderReprojection(cmd,in.cameraToken,depthImage,ds.format,motionImage,ms.format,dw,dh,ds.layout,ms.layout,in.slConstants,depthOrigin.x,depthOrigin.y,motionOrigin.x,motionOrigin.y);
  in.flags=flags;in.recorded=in.valid=true;in.submitted=false;in.commands.clear();in.commands.insert(cmd);in.order=++inputSerial;
  in.epoch=0;for(auto& f:chain->frames)if(f.acquired)in.epoch=(std::max)(in.epoch,f.epoch);
+ in.focusGeneration=focusHistory.generation;
+ in.preparedAfterAcquire=acquireSerial;
  // Submit markers belong to the queue boundary, never command recording.
  RuntimeErrors::ClearError(RuntimeErrors::Code::InputInvalid);RuntimeErrors::ClearError(RuntimeErrors::Code::ConstantsFailed);return true;
 }
@@ -667,6 +718,7 @@ VkResult XessPresent(VkQueue q,const VkPresentInfoKHR* pi){
  if(!virtualList)return Fn<PFN_vkQueuePresentKHR>("vkQueuePresentKHR")(q,pi);
  if(!XessValidatePresentQueue(q,pi))return VK_ERROR_FEATURE_NOT_PRESENT;
  auto& c=*chain;if(!pi->pImageIndices || pi->pImageIndices[0]>=c.frames.size() || pi->waitSemaphoreCount>64)return VK_ERROR_INITIALIZATION_FAILED;
+ const bool focused=UpdateBridgeFocus();
  auto& f=c.frames[pi->pImageIndices[0]];if(!f.acquired || !Retire(f.retired))return VK_ERROR_DEVICE_LOST;
  double uploadStart=ClockMs();if(!Vk(Fn<PFN_vkWaitForFences>("vkWaitForFences")(device,1,&f.fence,VK_TRUE,5000000000ull),"XeSS upload command retirement"))return VK_ERROR_DEVICE_LOST;timings.uploadRetire.Add(ClockMs()-uploadStart);
  Input* in=nullptr;std::vector<Input*> drain;
@@ -674,23 +726,33 @@ VkResult XessPresent(VkQueue q,const VkPresentInfoKHR* pi){
   if(!candidate.epoch || candidate.epoch<=f.epoch){drain.push_back(&candidate);if((!candidate.epoch || candidate.epoch==f.epoch) && (!in || candidate.order<in->order))in=&candidate;}
  }
  bool haveHud=HudCaptureResource().resource!=nullptr && HudCaptureFrameIndex()==f.epoch;
- bool off=Rt().fgUserOff.load();uint32_t multiplier=Rt().frames;bool requestOff{};
- if(ConsumeMenuRequest(requestOff,multiplier)){off=requestOff;Rt().fgUserOff=off;}
+ // PollHotkeys is the sole consumer: it persists/logs each accepted menu
+ // request. Consuming a newly built UI request here skipped that path.
+ bool off=Rt().fgUserOff.load();uint32_t multiplier=Rt().frames;
  multiplier=(std::max)(1u,(std::min)(multiplier,(std::max)(1u,sdk.MaxInterpolations())));Rt().frames=multiplier;
  Rt().maxFrames=(std::max)(1u,sdk.MaxInterpolations());
  if(attached && !sdkFailed && !sdk.SetInterpolations(multiplier))SdkError(false);
  UpdateMenuRuntime(off,multiplier);
- bool generate=attached && !sdkFailed && in && in->valid && haveHud && !off && HasRecentDLSSInput();
+ const bool recentInput=HasRecentDLSSInput();
+ bool generate=attached && !sdkFailed && in && in->valid && haveHud && !off && recentInput;
+ if(!sdk.IsDLSS() && (!focused || !in || !focusHistory.Accepts(f.epoch,in->epoch,in->focusGeneration)))generate=false;
  if(in && in->epoch==0 && drain.size()!=1)generate=false;
+ if(!sdk.IsDLSS() && focused && attached && !off && haveHud && !generate && inputGapReports<8){
+  ++inputGapReports;
+  Log("XeSS input gap: epoch=%llu inputOrder=%llu inputEpoch=%llu preparedAfter=%llu inputValid=%d recentSR=%d generation=%llu inputGeneration=%llu candidates=%zu sdkFailed=%d; native frame retained",
+   (unsigned long long)f.epoch,(unsigned long long)(in?in->order:0),(unsigned long long)(in?in->epoch:0),
+   (unsigned long long)(in?in->preparedAfterAcquire:0),int(in&&in->valid),int(recentInput),
+   (unsigned long long)focusHistory.generation,(unsigned long long)(in?in->focusGeneration:0),drain.size(),int(sdkFailed));
+ }
  // Loading/menu screens have no SR input and need no HUD-less gameplay frame.
  // Report a missing HUD capture only when a real, valid SR input exists.
  static ULONGLONG missingHudSince=0,missingInputSince=0;
  const auto inputNow=GetTickCount64();
- if(attached && !off && in && in->valid && !haveHud){
+ if(focused && attached && !off && in && in->valid && !haveHud){
   if(!missingHudSince)missingHudSince=inputNow;
   if(inputNow-missingHudSince>=500)Error(RuntimeErrors::Code::InputInvalid,"HUD-less post-tone-map pass missing for over 500 ms; waiting for a matching current-frame snapshot, native rendering and menu continue");
  }else{missingHudSince=0;if(haveHud)RuntimeErrors::ClearError(RuntimeErrors::Code::InputInvalid);}
- if(attached && !off && !in && haveHud){
+ if(focused && attached && !off && !in && haveHud){
   if(!missingInputSince)missingInputSince=inputNow;
   if(inputNow-missingInputSince>=15000)Error(RuntimeErrors::Code::InputMissing,"No captured DLSS depth/MV inputs for 15 seconds while final-color rendering continues; verify in-game DLSS and other upscaling hooks");
  }else{missingInputSince=0;if(off || (in && in->valid))RuntimeErrors::ClearError(RuntimeErrors::Code::InputMissing);}
@@ -775,14 +837,39 @@ VkResult XessPresent(VkQueue q,const VkPresentInfoKHR* pi){
  // Read the presentation diagnostic before the final marker can replace it.
  auto presentationStatus=sdk.Status();
  resumeHistory.Presented(f.epoch,generate,presented==S_OK);
+ if(!sdk.IsDLSS() && focusFramePending && generate && presented==S_OK){
+  Log("XeSS focus recovery: accepted fresh frame epoch=%llu generation=%llu reset=%u",
+   (unsigned long long)f.epoch,(unsigned long long)focusHistory.generation,in->constants.resetHistory);
+  focusFramePending=false;
+ }
  if(in){CommitFrameCamera(in->cameraToken,generate && presented==S_OK);CommitRenderReprojection(in->cameraToken,generate && presented==S_OK);}
  if(generate && presented==S_OK)presentedDimensions.Accept(in->dw,in->dh);
  if(markers)sdk.Marker(id,XELL_PRESENT_END);f.acquired=false;
- xefg_swapchain_present_status_t actual{};bool measured=attached && sdk.LastPresent(actual) && presentationStatus.native==0;
+ xefg_swapchain_present_status_t actual{};
+ // XeSS query success determines whether its output counts are valid. The
+ // saved status predates this query and may describe an unrelated XeLL call.
+ bool measured=attached && sdk.LastPresent(actual) && (!sdk.IsDLSS() || presentationStatus.native==0);
  if(attached && sdk.IsDLSS() && presentationStatus.native)Error(RuntimeErrors::Code::ProviderState,presentationStatus.operation?presentationStatus.operation:"DLSSG DX12 state query failed",presentationStatus.native);
- SetFPSGenerationActive(measured && actual.isFrameGenEnabled);
+ // This flag describes an asynchronous SDK batch. Zero/native batches must
+ // not erase the FPS sample accumulated from earlier generated batches.
+ // Actual focus/lifecycle transitions still reset measurement explicitly.
+ SetFPSGenerationActive(measured && actual.isFrameGenEnabled,false);
  if(measured){RecordDisplayedFrames(actual.framesPresented);UpdateMenuStats(sdk.MaxInterpolations(),(uint32_t)actual.frameGenResult,(float)actual.framesPresented);}
- else{RecordDisplayedFrames(1);UpdateMenuStats(1,0,1);}
+ else{if(!attached)RecordDisplayedFrames(1);UpdateMenuStats(1,0,1);}
+ if(!sdk.IsDLSS() && focused && !focusEvidence.done){
+  if(!focusEvidence.started && generate){UINT count{};auto result=c.dx->GetLastPresentCount(&count);focusEvidence.Begin(GetTickCount64(),result,count);}
+  focusEvidence.Observe(generate,haveHud,generate && in->constants.resetHistory,measured,actual.framesPresented);
+  if(focusEvidence.started && measured){if(actual.isFrameGenEnabled)++evidenceEnabled;else ++evidenceDisabled;}
+  if(focusEvidence.Ready(GetTickCount64())){
+   UINT count{};auto result=c.dx->GetLastPresentCount(&count);auto delta=focusEvidence.NativeDelta(result,count);
+   Log("XeSS recovery sample: ms=%llu presents=%llu eligible=%llu hud=%llu resets=%llu queries=%llu SDKoutputs=%llu multiBatches=%llu enabledBatches=%llu disabledBatches=%llu preAcquireBound=%llu DXGIpresents=%lld; counts are SDK/proxy submissions, not scanout",
+    (unsigned long long)(GetTickCount64()-focusEvidence.startMs),(unsigned long long)focusEvidence.presents,(unsigned long long)focusEvidence.eligible,
+    (unsigned long long)focusEvidence.hud,(unsigned long long)focusEvidence.resets,(unsigned long long)focusEvidence.queries,
+    (unsigned long long)focusEvidence.sdkOutputs,(unsigned long long)focusEvidence.multiQueries,(unsigned long long)evidenceEnabled,
+    (unsigned long long)evidenceDisabled,(unsigned long long)preAcquireBindings,delta?(long long)*delta:-1ll);
+   focusEvidence.done=true;
+  }
+ }
  if(serial==1 || serial%120==0)LogDebug("XeSS telemetry: frame=%llu epoch=%llu input=%llu hud=%llu requested=%d enabled=%u displayed=%u result=%d query=%lld reset=%u resetStreak=%u",(unsigned long long)serial,(unsigned long long)f.epoch,(unsigned long long)(in?in->order:0),(unsigned long long)HudCaptureFrameIndex(),(int)generate,actual.isFrameGenEnabled,actual.framesPresented,(int)actual.frameGenResult,(long long)sdk.StateQueryResult(),in?in->constants.resetHistory:0,resetStreak);
  if(serial%120==0){auto timingLog=timingReportsLeft?&Log:&LogDebug;if(timingReportsLeft)--timingReportsLeft;timingLog("Bridge CPU timing avg/max ms: acquireRetire=%.3f/%.3f XeLLSleep=%.3f/%.3f uploadRetire=%.3f/%.3f tags=%.3f/%.3f proxyPresent=%.3f/%.3f interval=%u presentFlags=0x%x; SDK output counts are queued frames, not scanout timestamps",timings.acquireRetire.Mean(),timings.acquireRetire.maximum,timings.sleep.Mean(),timings.sleep.maximum,timings.uploadRetire.Mean(),timings.uploadRetire.maximum,timings.tagCPU.Mean(),timings.tagCPU.maximum,timings.presentCPU.Mean(),timings.presentCPU.maximum,interval,presentFlags);timings={};}
  static ULONGLONG nativeSince=0;auto now=GetTickCount64();

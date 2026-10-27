@@ -81,6 +81,7 @@ static void ApplyMenuScale(){
 struct Message {UINT id;WPARAM w;LPARAM l;};
 static std::mutex inputMutex;
 static std::array<Message,256> messages{};static size_t messageCount=0;
+static std::atomic<bool> resetMenuInput{false};
 static void QueueInput(UINT id,WPARAM w,LPARAM l){
   std::lock_guard<std::mutex> lock(inputMutex);
   if(id==WM_MOUSEMOVE && messageCount && messages[messageCount-1].id==WM_MOUSEMOVE){messages[messageCount-1]={id,w,l};return;}
@@ -97,6 +98,7 @@ static BOOL WINAPI CursorClip(const RECT* rect){
 static void Toggle(bool value){
   if(open.exchange(value)==value)return;
   if(value)StartUpdateCheck(true);
+  else {resetMenuInput=true;captureMenuKey=false;}
   std::lock_guard<std::mutex> lock(inputMutex);
   if(value){GetCursorPos(&savedCursor);GetClipCursor(&desiredClip);hasClip=true;originalClipCursor(nullptr);}
   else if(GetForegroundWindow()==game){originalSetCursorPos(savedCursor.x,savedCursor.y);if(hasClip)originalClipCursor(&desiredClip);}
@@ -123,9 +125,11 @@ static LRESULT ProcessGameMessage(HWND w,UINT m,WPARAM a,LPARAM b){
   if(m==WM_KILLFOCUS)Toggle(false);
   if(m==WM_KILLFOCUS || m==WM_SETFOCUS)QueueInput(m,a,b);
   if(m==WM_MOUSEMOVE || (m>=WM_LBUTTONDOWN && m<=WM_MOUSEHWHEEL) || m==WM_KEYDOWN || m==WM_KEYUP || m==WM_CHAR || m==WM_SYSKEYDOWN || m==WM_SYSKEYUP){
-    if(open){QueueInput(m,a,b);return 0;}
+    if(open){QueueInput(m,a,b);return menu_input::CanConsume(m)?0:1;}
   }
-  if(open && m==WM_INPUT){DefWindowProcW(w,m,a,b);return 0;}
+  // Never clean up or remove the game's raw-input packet on its behalf.
+  // DirectInput/Raw Input acquisition belongs to RDR2, including while the
+  // overlay is open. Cursor routing is managed separately above.
   return 1;
 }
 static BOOL CALLBACK FindGame(HWND w,LPARAM out){DWORD pid{};GetWindowThreadProcessId(w,&pid);wchar_t title[128]{};GetWindowTextW(w,title,128);if(pid==GetCurrentProcessId() && wcscmp(title,L"Red Dead Redemption 2")==0){*reinterpret_cast<HWND*>(out)=w;return FALSE;}return TRUE;}
@@ -139,7 +143,7 @@ static BOOL CALLBACK FindFallbackGame(HWND w,LPARAM out){
 bool MenuIsOpen(){return open;}
 void MenuRendererAvailable(bool available){rendererAvailable=available;if(!available)Toggle(false);}
 void StartMenu(){}
-void SetFPSGenerationActive(bool active){if(generationActive.exchange(active)!=active){fpsMeter.ResetDisplayed();displayedValid=false;}}
+void SetFPSGenerationActive(bool active,bool resetMeasurement){if(generationActive.exchange(active)!=active && resetMeasurement){fpsMeter.ResetDisplayed();displayedValid=false;}}
 void RecordDisplayedFrames(uint32_t n){fpsMeter.AddDisplayed(n);}
 void RecordGamePresent(){experiment::RecordPresent();auto now=GetTickCount64();if(fpsMeter.Present(now)){renderedFPS=fpsMeter.realFPS;displayedFPS=fpsMeter.outputFPS;displayedValid=fpsMeter.outputValid;lastSample=now;}}
 void UpdateMenuRuntime(bool off,uint32_t frames){runtime=(frames<<1)|(off?1:0);}
@@ -153,8 +157,7 @@ bool MenuInitializeUI(){
     // A fullscreen/settings transition can replace HWND or its input thread.
     // Rebind only the platform backend; font and renderer objects stay intact.
     Toggle(false);
-    if(messageHook)UnhookWindowsHookEx(messageHook);
-    messageHook=nullptr;menu_input::hook=nullptr;menu_input::target=nullptr;menu_input::handler=nullptr;
+    menu_input::Uninstall();messageHook=nullptr;
     if(ImGui::GetIO().BackendPlatformUserData)ImGui_ImplWin32_Shutdown();
     game=selected;if(!game)EnumWindows(FindGame,reinterpret_cast<LPARAM>(&game));
     if(!game)EnumWindows(FindFallbackGame,reinterpret_cast<LPARAM>(&game));
@@ -229,7 +232,7 @@ bool MenuInitializeUI(){
   const DWORD thread=GetWindowThreadProcessId(game,nullptr);
   messageHook=menu_input::Install(game,self,ProcessGameMessage)?menu_input::hook:nullptr;
   if(!messageHook){const auto error=GetLastError();RuntimeErrors::ReportError(RuntimeErrors::Code::MenuInput,"WH_GETMESSAGE installation failed; keyboard/mouse polling enabled",(int)error);Log("Menu input hook failed: error=%lu thread=%lu; polling fallback active",error,thread);}
-  else {RuntimeErrors::ClearError(RuntimeErrors::Code::MenuInput);Log("Menu input: WH_GETMESSAGE thread=%lu; game WndProc unchanged",thread);}
+  else {RuntimeErrors::ClearError(RuntimeErrors::Code::MenuInput);Log("Menu input: WH_GETMESSAGE thread=%lu; sent focus observer=%d; game WndProc unchanged",thread,int(menu_input::focusHook!=nullptr));}
   static bool cursorAttempted=false;
   if(!cursorAttempted){
     cursorAttempted=true;LONG result;
@@ -264,14 +267,23 @@ static void PollFallbackInput(){
   for(int i=0;i<5;++i){const bool current=open && (GetAsyncKeyState(buttons[i])&0x8000)!=0;if(current!=pressed[i])ImGui::GetIO().AddMouseButtonEvent(i,current);pressed[i]=current;}
 }
 bool MenuHasDrawing(){
+  static uint64_t focusRevision=0;
+  static bool wasFocused=false;
+  const auto revision=menu_input::focusLosses.load(std::memory_order_acquire);
+  const bool focused=GetForegroundWindow()==game;
+  if(initialized && (revision!=focusRevision || focused!=wasFocused)){
+    if(open)Toggle(false);
+    if(revision!=focusRevision || !focused)QueueInput(WM_KILLFOCUS,0,0);
+    if(focused)QueueInput(WM_SETFOCUS,0,0);
+    focusRevision=revision;wasFocused=focused;
+  }
   const auto nested=menu_input::nestedCallbacks.exchange(0,std::memory_order_relaxed);
   if(nested){RuntimeErrors::ReportError(RuntimeErrors::Code::MenuInputRecursion,"Nested WH_GETMESSAGE callbacks bypassed; host messages preserved",(int)nested);Log("UI-105: nested menu input callbacks bypassed=%u; game WndProc unchanged",nested);}
   PollFallbackInput();return open || showFPS;
 }
 void MenuResetUI(){
   MenuRendererAvailable(false);
-  if(messageHook)UnhookWindowsHookEx(messageHook);
-  messageHook=nullptr;menu_input::hook=nullptr;menu_input::target=nullptr;menu_input::handler=nullptr;
+  menu_input::Uninstall();messageHook=nullptr;
   if(ImGui::GetCurrentContext()){
     if(ImGui::GetIO().BackendPlatformUserData)ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
@@ -286,7 +298,25 @@ void MenuBuildUI(){
 #endif
   std::array<Message,256> pending;size_t pendingCount=0;
   {std::lock_guard<std::mutex> lock(inputMutex);pendingCount=messageCount;std::copy_n(messages.begin(),pendingCount,pending.begin());messageCount=0;}
-  for(size_t i=0;i<pendingCount;++i){auto& m=pending[i];ImGui_ImplWin32_WndProcHandler(game,m.id,m.w,m.l);}
+  for(size_t i=0;i<pendingCount;++i){
+    auto& m=pending[i];int button=-1;bool down=false;
+    switch(m.id){
+      case WM_LBUTTONDOWN:case WM_LBUTTONDBLCLK:button=0;down=true;break;
+      case WM_RBUTTONDOWN:case WM_RBUTTONDBLCLK:button=1;down=true;break;
+      case WM_MBUTTONDOWN:case WM_MBUTTONDBLCLK:button=2;down=true;break;
+      case WM_XBUTTONDOWN:case WM_XBUTTONDBLCLK:button=GET_XBUTTON_WPARAM(m.w)==XBUTTON1?3:4;down=true;break;
+      case WM_LBUTTONUP:button=0;break;case WM_RBUTTONUP:button=1;break;case WM_MBUTTONUP:button=2;break;
+      case WM_XBUTTONUP:button=GET_XBUTTON_WPARAM(m.w)==XBUTTON1?3:4;break;
+    }
+    // Win32's ImGui mouse-button handler calls SetCapture/ReleaseCapture.
+    // Those calls would change capture on a borrowed HWND from the Present
+    // thread. Feed the overlay directly without taking host mouse ownership.
+    if(button>=0)ImGui::GetIO().AddMouseButtonEvent(button,down);
+    else ImGui_ImplWin32_WndProcHandler(game,m.id,m.w,m.l);
+  }
+  if(resetMenuInput.exchange(false)){
+    ImGui::GetIO().ClearInputKeys();ImGui::GetIO().ClearInputMouse();
+  }
   const bool layoutChanged=scaleChanged;
   ApplyMenuScale();
   ImGui_ImplWin32_NewFrame();ImGui::GetIO().MouseDrawCursor=open;ImGui::NewFrame();
@@ -464,7 +494,7 @@ void MenuBuildUI(){
     }
     if(IsDX12Bridge(ActiveProvider())){
       const bool pending=BridgeRestartPending();ImGui::BeginDisabled(pending || providerNeedsGameRestart);
-      if(ImGui::Button(pending?"Restarting FG...":"Restart FG / Apply changes")){
+      if(ImGui::Button(pending?"Restarting FG...":nextProvider!=currentProvider?"Apply provider change":"Restart FG")){
         const auto selected=nextProvider==1?FGProvider::XeSS:FGProvider::DLSSGBridge;
         if(nextProvider!=currentProvider)request=0x100|((mode+1)<<1);
         RequestBridgeRestart(selected,ReadDLSSGPreset());
@@ -487,6 +517,7 @@ void MenuBuildUI(){
       ImGui::EndCombo();
     }
     ImGui::EndDisabled();
+    if(IsDX12Bridge(Cfg().provider))SmallNote("Multiplier changes apply automatically.");
     if(IsDX12Bridge(Cfg().provider))ImGui::TextDisabled("Runtime-reported maximum: %dx",modeCount+1);
     SmallNote("Opening this menu does not pause frame generation.");
     ImGui::EndChild();

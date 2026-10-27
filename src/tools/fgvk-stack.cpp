@@ -72,6 +72,12 @@ static int Dump(DWORD pid,const char* path,const fgvk::DiagnosticSnapshot* fault
   int dumped=0, skipped=0;
   for(BOOL ok = Thread32First(snap,&te); ok; ok = Thread32Next(snap,&te)){
     if(te.th32OwnerProcessID != pid) continue;
+    // Read-only input-queue evidence. No focus/capture changes or input injection.
+    GUITHREADINFO gui{};gui.cbSize=sizeof(gui);
+    if(GetGUIThreadInfo(te.th32ThreadID,&gui) &&
+       (gui.hwndActive || gui.hwndFocus || gui.hwndCapture || gui.flags))
+      fprintf(out,"GUI tid=%lu flags=0x%lx active=%p focus=%p capture=%p menuOwner=%p moveSize=%p\n",
+        te.th32ThreadID,gui.flags,gui.hwndActive,gui.hwndFocus,gui.hwndCapture,gui.hwndMenuOwner,gui.hwndMoveSize);
     HANDLE ht = OpenThread(THREAD_SUSPEND_RESUME|THREAD_GET_CONTEXT|THREAD_QUERY_INFORMATION, FALSE, te.th32ThreadID);
     if(!ht){ skipped++; continue; }
     std::string startMod = "?";

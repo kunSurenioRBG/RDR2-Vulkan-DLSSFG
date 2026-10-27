@@ -25,6 +25,6 @@ assert 'reflexSleep=false' in config and '"ReflexSleep=0\\n"' in config
 assert not re.search(r'Checkbox\([^\n]*(?:Reflex|SDK sleep|Native Vulkan)',menu)
 branding=(root/'src/branding.h').read_text(encoding='utf-8')
 source=(root/'src/update_source.h').read_text(encoding='utf-8')
-assert 'kVersion="1.0"' in branding
+assert 'kVersion="1.0.1"' in branding
 assert '#define RDR2FG_NEXUS_MOD_ID 0' in source
-print('Version 1.0 defaults, private-release update policy and preset/restart menu policy: PASS')
+print('Version 1.0.1 defaults, manual update policy and preset/restart menu policy: PASS')

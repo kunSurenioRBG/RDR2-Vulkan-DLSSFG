@@ -1,4 +1,4 @@
-RDR2-Vulkan-DLSSFG 1.0
+RDR2-Vulkan-DLSSFG 1.0.1
 kunSurenioRBG
 
 Download the full installation ZIP from the GitHub release, close the game,

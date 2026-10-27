@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.1
+
+- Preserve host raw input and release messages, avoid menu mouse-capture ownership changes and clear overlay input on close.
+- Suspend XeSS on focus loss and resume only with fresh matching frame inputs.
+- Accept valid copy-source depth/motion layouts without relaxing native shader-tag requirements.
+- Safely bind a unique current DLSS snapshot recorded before the next output-image acquire.
+- Preserve asynchronous output FPS measurements and validate XeSS queries independently of latency status.
+- Apply and save each multiplier change once; clarify the menu's restart/provider controls.
+- Add bounded diagnostics and focused regressions for focus, input, frame association and recovery.
+- Retain the complete clean installer and the verified 1.0 runtime DLL family.
+
 ## 1.0
 
 - Added clickable YouTube and GitHub footer links.

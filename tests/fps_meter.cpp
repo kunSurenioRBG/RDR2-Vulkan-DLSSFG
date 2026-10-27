@@ -15,6 +15,12 @@ int main(){
   run(3,true);
   check(m.outputValid && std::abs(m.realFPS-50)<0.01f && std::abs(m.outputFPS-150)<0.01f);
   m.ResetDisplayed();check(!m.outputValid && m.outputFPS==0 && m.displayed==0 && m.readings==0);
-  std::printf("8 FPS sampling checks (1x/3x/2x/dropout/pause/reset): %d failures\n",failed);
+  // The SDK may alternate empty/native batches and generated batches. Keep
+  // the real counts across those state reports rather than resetting on each.
+  for(unsigned frame=0;frame<100;++frame){m.AddDisplayed(frame%2?4:0);now+=20;m.Present(now);}
+  check(m.outputValid && std::abs(m.realFPS-50)<.01f && std::abs(m.outputFPS-100)<.01f);
+  for(unsigned frame=0;frame<50;++frame){m.AddDisplayed(1);now+=20;m.Present(now);}
+  check(m.outputValid && std::abs(m.outputFPS-50)<.01f);
+  std::printf("FPS sampling checks (native/generated/asynchronous/dropout/pause/reset): %d failures\n",failed);
   return failed?1:0;
 }

@@ -1,4 +1,4 @@
-# Building version 1.0
+# Building version 1.0.1
 
 Use Windows PowerShell, Git and Zig 0.16.0. The main ASI and core use the GNU Windows target. The modified Streamline interposer requires MSVC and a matching Microsoft C++ runtime.
 
@@ -24,10 +24,11 @@ The script writes `.deps/rdr2-fg-1.0-build/RDR2VulkanFG.asi`, copies the ASI to 
 
 ```powershell
 .\Test-Fixes.ps1 -ZigPath 'C:\tools\zig\zig.exe'
+.\Test-AltTab.ps1 -ZigPath 'C:\tools\zig\zig.exe'
 .\Build-Core.ps1 -ZigPath 'C:\tools\zig\zig.exe'
 ```
 
-Run the main build first to obtain its pinned dependencies. The test script checks adapter identity, XeSS pacing and provider lifecycle with assertions enabled. The core build compiles the vendored MinHook sources and writes `.deps/rdr2-fg-custom-core-build/RTX40MFGCore.dll`.
+Run the main build first to obtain its pinned dependencies. Test-Fixes checks adapter identity, XeSS pacing and provider lifecycle with assertions enabled. Test-AltTab covers focus generations, exact frame association, input layouts, host input preservation, recovery and output measurement; its isolated old-behavior fixtures must return the expected failure without crashing. The core build compiles the vendored MinHook sources and writes `.deps/rdr2-fg-custom-core-build/RTX40MFGCore.dll`. The 1.0.1 release retains the verified 1.0 core and runtime DLLs.
 
 ## Native menu preview
 
@@ -48,7 +49,7 @@ Keep the matching production plugins and runtime files. Updating the ASI alone d
 Use the pinned runtime family listed in `runtime-manifest.json` and the official Ultimate ASI Loader build identified there. The clean installer contains only the loader, main ASI, default configuration, runtime binaries and a consolidated mandatory notice file.
 
 ```powershell
-python tools/package_install.py --runtime-root 'C:\RDR2Runtime\RDR2VulkanFG' --loader 'C:\ASILoader\dinput8.dll' --output '.\RDR2-Vulkan-DLSSFG-v1.0-full.zip' --manifest '.\.deps\package-report.json'
+python tools/package_install.py --runtime-root 'C:\RDR2Runtime\RDR2VulkanFG' --loader 'C:\ASILoader\dinput8.dll' --output '.\RDR2-Vulkan-DLSSFG-v1.0.1-full.zip' --manifest '.\.deps\package-report.json'
 ```
 
 The main build supplies the ASI and diagnostic helper. Runtime input hashes must match the pinned family; deliberate binary updates require reviewing the manifest and compatibility checks. Default INIs are generated from release settings, never copied from a player's preferences. Legal notices are preserved verbatim and consolidated in `licenses/NOTICES.txt`.

@@ -345,7 +345,8 @@ static bool PrepareFrameData(VkCommandBuffer cmd,const FrameInputs& input,Prepar
     if(++blocked==1 || blocked%300==0){std::lock_guard<std::mutex> lock(resource_detail::mutex);auto c=resource_detail::commands.find(cmd);Log("FG blocked: metadata images=%zu commands=%zu thisCmd=%zu depthCreated=%d mvCreated=%d",resource_detail::images.size(),resource_detail::commands.size(),c==resource_detail::commands.end()?0:c->second.size(),resource_detail::images.count(input.depthImage)!=0,resource_detail::images.count(input.mvecImage)!=0);}
     return false;
   }
-  if(!ReadableLayout(ds.layout)||!ReadableLayout(msState.layout)){char detail[256];snprintf(detail,sizeof(detail),"cmd=%p depth=%p layout=%d mv=%p layout=%d; observed layout is not readable",(void*)cmd,(void*)input.depthImage,(int)ds.layout,(void*)input.mvecImage,(int)msState.layout);InputError(RuntimeErrors::Code::InputState,detail);return false;}
+  const bool copyTransport=IsDX12Bridge(Cfg().provider);
+  if(!FGInputLayout(ds.layout,ds.usage,copyTransport)||!FGInputLayout(msState.layout,msState.usage,copyTransport)){char detail[256];snprintf(detail,sizeof(detail),"cmd=%p depth=%p layout=%d mv=%p layout=%d; observed state/usage is invalid for %s",(void*)cmd,(void*)input.depthImage,(int)ds.layout,(void*)input.mvecImage,(int)msState.layout,copyTransport?"snapshot copy":"shader input");InputError(RuntimeErrors::Code::InputState,detail);return false;}
   InputRecovered(RuntimeErrors::Code::InputState);
   int srf=input.featureFlags;if(srf<0)return false;
   float aspect=(float)input.renderW/(float)input.renderH;

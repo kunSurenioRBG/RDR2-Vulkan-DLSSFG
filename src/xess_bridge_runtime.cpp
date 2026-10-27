@@ -105,6 +105,14 @@ bool Runtime::SetEnabled(bool enabled){
   xess_pacing::Reset(fg_);
   enabled_=enabled;enabledKnown_=true;return true;
 }
+bool Runtime::SuspendForFocus(){
+  // The SDK may have changed its internal state during a window-mode change.
+  // Force an actual disable, not a cache hit; re-enable only after fresh tags.
+  enabledKnown_=false;
+  if(!SetEnabled(false))return false;
+  tagged_=false;
+  return true;
+}
 bool Runtime::AttachPresentation(IDXGISwapChain3* existing,ID3D12CommandQueue* queue,uint32_t flags,
     uint32_t count,xefg_swapchain_ui_mode_t uiMode){
   if(!fg_ || swapchain_ || initializedMax_ || !existing || !queue || !count || count>MaxInterpolations())
@@ -126,6 +134,7 @@ bool Runtime::SetInterpolations(uint32_t count){
   if(activeInterpolations_==count){status_={RuntimeError::None,"XeSS interpolation count unchanged",0};return true;}
   if(!FG("xefgSwapChainSetNumInterpolatedFrames",p_xefgSwapChainSetNumInterpolatedFrames(fg_,count)))return false;
   activeInterpolations_=count;
+  Log("XeSS multiplier applied: generated=%u outputMultiplier=%u",count,count+1);
   xess_pacing::Reset(fg_);return true;
 }
 bool Runtime::Sleep(uint32_t id,uint32_t fpsCap,uint32_t outputCap,uint32_t outputs){

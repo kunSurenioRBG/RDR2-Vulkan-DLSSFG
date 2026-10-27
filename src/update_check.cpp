@@ -18,7 +18,7 @@ static std::atomic<bool> browserOpening{false},browserFailed{false};
 static char browserURL[256]{}; // Published to the worker after acquiring browserOpening.
 struct InternetHandle {HINTERNET h{};~InternetHandle(){if(h)WinHttpCloseHandle(h);}};
 static bool FetchManifest(UpdateManifest& out){
-  InternetHandle session{WinHttpOpen(L"RDR2VulkanFG/1.0",WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0)};
+  InternetHandle session{WinHttpOpen(L"RDR2VulkanFG/1.0.1",WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0)};
   if(!session.h || !WinHttpSetTimeouts(session.h,3000,3000,3000,3000))return false;
   InternetHandle connection{WinHttpConnect(session.h,L"api.nexusmods.com",INTERNET_DEFAULT_HTTPS_PORT,0)};if(!connection.h)return false;
   InternetHandle request{WinHttpOpenRequest(connection.h,L"POST",L"/v2/graphql",nullptr,WINHTTP_NO_REFERER,WINHTTP_DEFAULT_ACCEPT_TYPES,WINHTTP_FLAG_SECURE)};if(!request.h)return false;

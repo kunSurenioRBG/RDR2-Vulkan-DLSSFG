@@ -1,5 +1,5 @@
 {
-  "version": "1.0",
+  "version": "1.0.1",
   "archive_integrity": "PASS",
   "exact_file_hashes": "PASS",
   "architecture": "Windows x64",
@@ -83,6 +83,7 @@
       "api-ms-win-crt-stdio-l1-1-0.dll",
       "api-ms-win-crt-string-l1-1-0.dll",
       "kernel32.dll",
+      "user32.dll",
       "api-ms-win-crt-heap-l1-1-0.dll",
       "api-ms-win-crt-locale-l1-1-0.dll"
     ],

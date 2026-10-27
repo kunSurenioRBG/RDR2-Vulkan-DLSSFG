@@ -28,6 +28,7 @@ public:
       const DXGI_SWAP_CHAIN_DESC1&,uint32_t initFlags,uint32_t interpolations,
       xefg_swapchain_ui_mode_t,const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* fullscreen=nullptr);
   bool SetEnabled(bool);
+  bool SuspendForFocus();
   bool AttachPresentation(IDXGISwapChain3*,ID3D12CommandQueue*,uint32_t initFlags,
       uint32_t interpolations,xefg_swapchain_ui_mode_t);
   bool SetInterpolations(uint32_t);

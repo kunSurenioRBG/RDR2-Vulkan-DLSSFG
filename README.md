@@ -1,8 +1,8 @@
 # RDR2-Vulkan-DLSSFG
 
-**Version 1.0 · kunSurenioRBG · Red Dead Redemption 2 only**
+**Version 1.0.1 · kunSurenioRBG · Red Dead Redemption 2 only**
 
-Frame generation for Red Dead Redemption 2 while the game renders with Vulkan. This release includes GPU identity and XeSS pacing fixes, plus a redesigned native in-game menu.
+Frame generation for Red Dead Redemption 2 while the game renders with Vulkan. Version 1.0.1 improves XeSS focus recovery, game input, frame association and output telemetry.
 
 ![Native in-game menu rendered in an isolated preview with example telemetry](docs/screenshots/menu-generation.png)
 
@@ -12,13 +12,15 @@ Frame generation for Red Dead Redemption 2 while the game renders with Vulkan. T
 - XeSS frame generation through the existing internal Vulkan/D3D12 interoperability path.
 - CUDA-backed NVIDIA adapter selection to handle certain duplicate DXGI identities.
 - Cached XeSS multiplier changes and corrected 2x presentation timing.
+- Fresh-input recovery after Alt+Tab, with host keyboard and mouse input preserved.
+- Safe association of DLSS input snapshots recorded before the next output-image acquire.
 - Optional bounded diagnostics, disabled by default.
 
 This project targets RDR2. Experimental multipliers and unofficial GPU unlocks retain their existing limitations.
 
 ## Download and install
 
-Download [RDR2-Vulkan-DLSSFG-v1.0-full.zip](https://github.com/kunSurenioRBG/RDR2-Vulkan-DLSSFG/releases/download/v1.0/RDR2-Vulkan-DLSSFG-v1.0-full.zip).
+Download [RDR2-Vulkan-DLSSFG-v1.0.1-full.zip](https://github.com/kunSurenioRBG/RDR2-Vulkan-DLSSFG/releases/download/v1.0.1/RDR2-Vulkan-DLSSFG-v1.0.1-full.zip).
 
 The installation ZIP includes the official ASI loader, the main ASI, a default INI, the corrected core, Streamline, XeSS and the diagnostic helper. The exact runtime family is pinned in `runtime-manifest.json`.
 
@@ -45,9 +47,9 @@ Provider availability and maximum multipliers depend on the selected runtime and
 
 ## Build and validation
 
-See [build instructions](docs/BUILD.md), [validation](docs/VALIDATION.md), [release notes](docs/RELEASE-1.0.md) and [implementation notes](docs/MAINTAINER-NOTES.md).
+See [build instructions](docs/BUILD.md), [validation](docs/VALIDATION.md), [release notes](docs/RELEASE-1.0.1.md) and [implementation notes](docs/MAINTAINER-NOTES.md).
 
-The frame-generation fixes were tested on an RTX 3080 Ti, and improved smoothness was confirmed by the user. The branded menu was compiled and rendered in an isolated fixture at 100% and 150% scale. Preview images use example telemetry. An increased FPS counter is not proof of uniform physical display cadence, and isolated UI rendering is not an in-game test.
+The fixes were tested on an RTX 3080 Ti, and the user confirmed smooth gameplay. A five-second XeSS 3x sample accepted all 224 game frames, with zero SDK-disabled batches and one initial history reset. Brief recovery can still occur when changing the multiplier. Output telemetry measures SDK/proxy submissions rather than physical scanout. Menu preview images use example telemetry. See validation for the exact test scope.
 
 ## License
 

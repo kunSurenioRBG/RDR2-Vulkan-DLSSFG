@@ -1,4 +1,5 @@
 #include "xess_bridge_snapshot.h"
+#include "input_layout.h"
 
 namespace fgvk::xess_bridge {
 bool Snapshot::Create(Device& bridge,VkDevice device,VkPhysicalDevice physical,
@@ -47,7 +48,7 @@ bool Snapshot::Record(VkCommandBuffer cmd,const SnapshotInput& color,const Snaps
     if(i==0 && !includeColor)continue;
     const auto& in=*source[i];const auto size=sizes[i];
     if(!in.image || !(in.usage&VK_IMAGE_USAGE_TRANSFER_SRC_BIT) ||
-       in.layout==VK_IMAGE_LAYOUT_UNDEFINED || in.layout==VK_IMAGE_LAYOUT_PREINITIALIZED ||
+       !FGInputLayout(in.layout,in.usage,true) ||
        in.origin.x<0 || in.origin.y<0 || uint64_t(in.origin.x)+size.width>in.allocationExtent.width ||
        uint64_t(in.origin.y)+size.height>in.allocationExtent.height)
       return Fail("Snapshot source lacks a valid layout, transfer usage or extent");
@@ -109,7 +110,7 @@ bool Snapshot::Record(VkCommandBuffer cmd,const SnapshotInput& color,const Snaps
 }
 bool Snapshot::RecordColor(VkCommandBuffer cmd,const SnapshotInput& in,uint32_t family,bool firstUse){
   if(!bridge_ || !cmd || !in.image || in.format!=colorFormat_ ||
-     !(in.usage&VK_IMAGE_USAGE_TRANSFER_SRC_BIT) || in.origin.x<0 || in.origin.y<0 ||
+     !FGInputLayout(in.layout,in.usage,true) || in.origin.x<0 || in.origin.y<0 ||
      uint64_t(in.origin.x)+output_.width>in.allocationExtent.width ||
      uint64_t(in.origin.y)+output_.height>in.allocationExtent.height)return Fail("Invalid HUD-less color snapshot");
   VkImageMemoryBarrier barriers[2]{};

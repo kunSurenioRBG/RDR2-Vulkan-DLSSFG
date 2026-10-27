@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <cstring>
 #include "config.h"
+#include "input_layout.h"
 namespace fgvk {
 void HudCaptureForgetCommand(VkCommandBuffer);
 void ForgetFGCommand(VkCommandBuffer);
@@ -34,11 +35,6 @@ inline PFN_vkCmdEndRenderPass2 endPass2=nullptr,endPass2KHR=nullptr;
 inline PFN_vkCmdExecuteCommands executeCommands=nullptr;
 inline PFN_vkCmdBeginRendering beginRendering=nullptr,beginRenderingKHR=nullptr;
 inline PFN_vkCmdEndRendering endRendering=nullptr,endRenderingKHR=nullptr;
-}
-inline bool ReadableLayout(VkImageLayout l){
-  return l==VK_IMAGE_LAYOUT_GENERAL || l==VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL ||
-      l==VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL || l==VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL ||
-      l==VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
 }
 inline void ForgetCommand(VkCommandBuffer c){
   std::lock_guard<std::mutex> lock(resource_detail::mutex);

@@ -25,7 +25,7 @@ unsigned pacingResets=0;
 struct Context {
  void** table{};unsigned refs=2,tags{},sleeps{},destroyed{},latencyDestroyed{},nativePresents{};bool enabled{};
  uint32_t presentId{};HANDLE event{};UINT latency{};
- unsigned interpolationCalls{};bool interpolationFail{};
+ unsigned interpolationCalls{},enableCalls{};bool interpolationFail{},enableFail{};
  static ULONG STDMETHODCALLTYPE AddRef(Context* c){return ++c->refs;}
  static ULONG STDMETHODCALLTYPE Release(Context* c){assert(c->refs);return --c->refs;}
  static HRESULT STDMETHODCALLTYPE Desc(Context*,DXGI_SWAP_CHAIN_DESC1* out){*out={};out->Flags=0;return S_OK;}
@@ -37,7 +37,7 @@ Context* C(xefg_swapchain_handle_t c){return reinterpret_cast<Context*>(c);}
 xefg_swapchain_result_t Destroy(xefg_swapchain_handle_t h){auto* c=C(h);if(c->refs)return XEFG_SWAPCHAIN_RESULT_ERROR_POINTER_STILL_IN_USE;++c->destroyed;return XEFG_SWAPCHAIN_RESULT_SUCCESS;}
 xefg_swapchain_result_t Recover(xefg_swapchain_handle_t h,REFIID,void** out){auto* c=C(h);++c->refs;*out=c;return XEFG_SWAPCHAIN_RESULT_SUCCESS;}
 xell_result_t DestroyLL(xell_context_handle_t h){auto* c=reinterpret_cast<Context*>(h);assert(c->destroyed);++c->latencyDestroyed;return XELL_RESULT_SUCCESS;}
-xefg_swapchain_result_t Enable(xefg_swapchain_handle_t h,uint32_t enabled){auto* c=C(h);c->enabled=enabled!=0;c->tags=0;return XEFG_SWAPCHAIN_RESULT_SUCCESS;}
+xefg_swapchain_result_t Enable(xefg_swapchain_handle_t h,uint32_t enabled){auto* c=C(h);++c->enableCalls;if(c->enableFail)return static_cast<xefg_swapchain_result_t>(-1);c->enabled=enabled!=0;c->tags=0;return XEFG_SWAPCHAIN_RESULT_SUCCESS;}
 xefg_swapchain_result_t Constants(xefg_swapchain_handle_t,uint32_t,const xefg_swapchain_frame_constant_data_t*){return XEFG_SWAPCHAIN_RESULT_SUCCESS;}
 xefg_swapchain_result_t Tag(xefg_swapchain_handle_t h,ID3D12CommandList*,uint32_t,const xefg_swapchain_d3d12_resource_data_t*){assert(C(h)->enabled);++C(h)->tags;return XEFG_SWAPCHAIN_RESULT_SUCCESS;}
 xefg_swapchain_result_t Id(xefg_swapchain_handle_t h,uint32_t id){auto* c=C(h);assert(!c->enabled || c->tags==3);c->presentId=id;return XEFG_SWAPCHAIN_RESULT_SUCCESS;}
@@ -67,6 +67,28 @@ int main(){
  using fgvk::xess_bridge::Runtime;
  void* table[34]{};table[1]=(void*)&Context::AddRef;table[2]=(void*)&Context::Release;table[8]=(void*)&Context::Present;
  table[18]=(void*)&Context::Desc;table[31]=(void*)&Context::Latency;table[33]=(void*)&Context::Event;
+ {Context c;Runtime r;Setup(r,c,table);auto* extra=r.swapchain_;
+  assert(r.SetEnabled(false));const auto calls=c.enableCalls;
+  c.enabled=true; // Window/SDK state changed outside the host's cached state.
+#ifdef FGVK_BASELINE_FOCUS
+  const bool suspended=r.SetEnabled(false);
+#else
+  const bool suspended=r.SuspendForFocus();
+#endif
+  if(!suspended || c.enabled || c.enableCalls!=calls+1){
+   puts("FAIL: cached disable skips actual SDK suspension after focus loss");
+   fgvk::ReleasePresentationBeforeSDK(extra,[&]{return r.Shutdown();});return 1;
+  }
+  assert(r.SetEnabled(true) && c.enabled);
+  c.enabled=false; // SDK autonomously disabled during a mode transition.
+  assert(r.SuspendForFocus() && !c.enabled);
+  assert(r.SetEnabled(true) && c.enabled);
+  c.enableFail=true;assert(!r.SuspendForFocus() && !r.enabledKnown_);
+  c.enableFail=false;assert(r.SuspendForFocus() && !c.enabled);
+  const auto stableCalls=c.enableCalls;assert(r.SetEnabled(false) && c.enableCalls==stableCalls);
+  assert(fgvk::ReleasePresentationBeforeSDK(extra,[&]{return r.Shutdown();}));
+  puts("SDK focus suspension bypasses stale cache once; failed calls retry; steady state remains cached: PASS");
+ }
  {Context c;Runtime r;Setup(r,c,table);auto* extra=r.swapchain_;
   const unsigned before=pacingResets;
   sdk_pacing::cadence::BatchIntervalEstimator::Decision plan{};

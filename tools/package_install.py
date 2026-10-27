@@ -1,8 +1,10 @@
-"""Build the clean version 1.0 installation ZIP from the pinned runtime files."""
+"""Build the clean installation ZIP from the pinned runtime files."""
 from pathlib import Path
-import argparse,configparser,hashlib,json,zipfile
+import argparse,configparser,hashlib,json,re,zipfile
 
 project=Path(__file__).resolve().parents[1]
+version=re.search(r'kVersion="([0-9]+\.[0-9]+(?:\.[0-9]+)?)"',
+                  (project/'src/branding.h').read_text(encoding='utf-8')).group(1)
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--runtime-root',type=Path,required=True,help='Directory containing Core, Streamline and XeSS')
 parser.add_argument('--loader',type=Path,required=True,help='Official Ultimate ASI Loader dinput8.dll')
@@ -73,7 +75,7 @@ notice_files={name:data for name,data in files.items() if name.startswith('licen
 groups={}
 for name,data in sorted(notice_files.items()):
     groups.setdefault(digest(data),{'names':[],'data':data})['names'].append(name)
-parts=[b'RDR2 Vulkan Frame Generation 1.0 - Required license and attribution notices\n\n']
+parts=[f'RDR2 Vulkan Frame Generation {version} - Required license and attribution notices\n\n'.encode('utf-8')]
 for group in groups.values():
     parts.append(('='*72+'\nOriginal notice files: '+', '.join(group['names'])+'\n'+'='*72+'\n\n').encode('utf-8'))
     parts.append(group['data']);parts.append(b'\n\n')
@@ -93,7 +95,7 @@ with zipfile.ZipFile(args.output) as archive:
     assert archive.testzip() is None
     assert set(archive.namelist())==set(files)
     for name,data in files.items():assert digest(archive.read(name))==digest(data)
-report={'version':'1.0','package_type':'complete mod installation; the game and system prerequisites are external',
+report={'version':version,'package_type':'complete mod installation; the game and system prerequisites are external',
         'root_files':sorted(required_root),'file_count':len(files),'zip_bytes':args.output.stat().st_size,
         'zip_sha256':digest(args.output.read_bytes()),'files':{name:digest(data) for name,data in sorted(files.items())},
         'documentation_in_zip':False,'legal_notices_in_licenses_directory':True,'personal_configuration_included':False,

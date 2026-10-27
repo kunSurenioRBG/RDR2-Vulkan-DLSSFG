@@ -73,7 +73,7 @@ static void IniPath(char* out, size_t n){
 static void WriteDefaults(const char* path){
   FILE* f=nullptr; if(fopen_s(&f,path,"w")!=0 || !f) return;
   fputs(
-    "; RDR2 Vulkan Frame Generation 1.0. Edit advanced settings with the game closed.\n"
+    "; RDR2 Vulkan Frame Generation 1.0.1. Edit advanced settings with the game closed.\n"
     "[fgvk]\n"
     "Enabled=1\n"
     "FGProvider=DLSSG\nDLSSGBackend=Native\nCameraSource=Neutral\nCameraMaxAgeMs=50\nCameraAudit=0\nDiagnostics=0\nIntervalLogging=0\nOutputFPSCap=0\n"

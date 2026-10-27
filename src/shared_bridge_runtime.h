@@ -44,6 +44,7 @@ public:
     generated_=count;return true;
   }
   bool SetEnabled(bool enabled){bool ok=IsDLSS()?dlss_.SetEnabled(enabled,generated_):xess_.SetEnabled(enabled);if(ok)enabled_=enabled;return ok;}
+  bool SuspendForFocus(){bool ok=IsDLSS()?dlss_.SetEnabled(false,generated_):xess_.SuspendForFocus();if(ok)enabled_=false;return ok;}
   bool Sleep(uint32_t id,uint32_t fpsCap=0){const auto target=Rt().outputFPSCap.load();const auto outputs=enabled_?generated_+1:1;return IsDLSS()?dlss_.Sleep(id,fpsCap,target,outputs):xess_.Sleep(id,fpsCap,target,outputs);}
   bool VSyncSupported()const{return !IsDLSS() || dlss_.VSyncSupported();}
   bool Marker(uint32_t id,xell_latency_marker_type_t m){return IsDLSS()?dlss_.Marker(id,uint32_t(m)):xess_.Marker(id,m);}
